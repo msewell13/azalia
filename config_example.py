@@ -25,6 +25,7 @@ employer_ss = ''
 # Manager custom fields - input the field ID for each 
 pay_rate = ''
 fed_holding = ''
+invoice_paid = ''
 
 
 documents = [

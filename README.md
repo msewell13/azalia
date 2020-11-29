@@ -11,7 +11,7 @@ This project is a somewhat simple console script that aims to automote some task
 
 ## Getting Started
 
-You will need to create a few custom fields in Manager.io in order for the script to work. Please add the following under Settings/Custom Fields:
+You will need to create a few custom fields in Manager.io in order for the script to work. You will also need to get the field ID from the manager API and add them in config.py. Please add the following under Settings/Custom Fields:
 
 Sales Invoice - We use this to determine through the API if the invoice has been paid or not.
 1. Label: 'Paid', Type: 'Drop-down list' The options for the dropdown should be True and False. 

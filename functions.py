@@ -130,7 +130,7 @@ def invoices(choice):
 	for invoice in tqdm(invoices.json()):
 		data = s.get(url + invoice + '.json')
 		try:
-			if data.json()['CustomFields']['0738aee9-3adb-4c7f-9d65-4d6f2278e386'] == "False": #tests if invoice is marked paid
+			if data.json()['CustomFields'][invoice_paid] == "False": #tests if invoice is marked paid
 				r = s.get(f'https://{mgr_domain}.manager.io/sales-invoice-view.pdf?Key={invoice}&FileID={mgr_api_root}')
 				if r.status_code == 200:
 					with open(f'{invoice}.pdf', 'wb') as out_file:
@@ -142,13 +142,13 @@ def invoices(choice):
 							# pageObj.scaleTo(width=612, height=792)
 							pdfWriter.addPage(pageObj)
 						# Send invoice to tenant
-						customer_id = s.get(url + f'{invoice}.json').json()['Customer']
+						customer_id = s.get(mgr_url + f'{invoice}.json').json()['Customer']
 						customer = Customer(customer_id)
 						send_letter(customer.name, customer.address, customer.city, customer.state, customer.zip_code, f'{invoice}.pdf')
 					elif choice == '3':
 						try:
-							customer = s.get(url + f'{invoice}.json').json()['Customer']
-							email = s.get(url + f'{customer}.json').json()['Email']
+							customer = s.get(mgr_url + f'{invoice}.json').json()['Customer']
+							email = s.get(mgr_url + f'{customer}.json').json()['Email']
 							send_email(email, f'{invoice}.pdf')
 						except KeyError:
 							tqdm.write('This customer does not have an email')
