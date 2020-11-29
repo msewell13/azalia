@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% from "_render_field.html" import render_field %}
+
+{% block content %}
+{% include 'flash.html' %}
+<div class="container" role="main">
+	<h1>{{ page }}</h1>
+        
+        <div class="row">
+          <div class="col-lg-12">           
+            <div class="well bs-component">
+              <!-- Get page name in stripe.js -->
+              <input type="hidden" id="page" value="{{page}}">
+          <form class="form-horizontal", method="POST" id={{page}}>
+               {{ form.csrf_token }}
+                 <fieldset>
+                	{% for item in form if not "csrf_token" in item.name %}
+                		{{ render_field(item) }}
+        					{% endfor %} 
+                 {% if page == 'Signup' and 
+                  3 > access_level > 0 or page == 'Wallet' %} 
+                  <div class="form-group">
+                    <label class="col-lg-4 control-label" for="card-element">
+                      <b>Credit or debit card</b>
+                    </label>
+                    <div id="card-element">
+                      <!-- A Stripe Element will be inserted here. -->
+                    </div>
+                   
+                    <!-- Used to display Element errors. -->
+                    <div id="card-errors" role="alert"></div>
+                  </div>
+                  <input type="hidden" value={{stripe_key}} id="stripe_key">
+                {% endif %}                         
+                  <div class="form-group">
+                    <div class="col-lg-10 col-lg-offset-2">
+                      <button type="submit" class="btn btn-primary">Submit</button>
+                      {% if page == 'Login' %}
+                    <a href="{{url_for('forget_password') }}">forget password</a>
+                      {% endif %} 
+                    </div>
+                  </div>
+                </fieldset>
+              </form>
+            </div>
+          </div>
+          <script>
+          {% if page == 'Signup' or page == 'Reset Password' %}
+          $(document).ready(function(){
+            $('#password').tooltip({
+            title: function(){
+            return $(this).attr('title', '8 characters minimum');
+            }
+          });  
+          });
+          {% endif %}      
+          </script>        
+          {% if page == 'Signup' and 
+                3 > access_level > 0 or page == 'Wallet' %}        
+            <script src="https://js.stripe.com/v3/"></script>
+            <script src="{{ url_for('static', filename='stripe.js') }}"></script>
+          {% endif %} 
+    </div>
+</div> <!-- /container -->  
+{% endblock %}
+
+
