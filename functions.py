@@ -24,7 +24,6 @@ else:
 
 s = requests.Session()
 s.auth = (mgr_usr, mgr_pass)
-url = mgr_url
 
 
 def display_title_bar():
@@ -40,24 +39,27 @@ def choices(list_of_dicts):
 	x = 1
 	print('\n')
 	for dict_item in list_of_dicts:
-		print(f"[{x}] {dict_item['name']}")
+		r = s.get(f'{mgr_url}{dict_item}.json')
+		print(f"[{x}] {r.json()['Name']}")
 		x+=1
 	choice = input("\nPlease make a selection: ")
-	selection = list_of_dicts[int(choice) -1]
-	# selection = next((item for item in list_of_dicts if item['number'] == choice), None)
+	item_id = list_of_dicts[int(choice) -1]
+	selection = s.get(f'{mgr_url}{item_id}.json').json()
 	if selection == None:
 		print("I didn't understand that choice. Try again")
 	else:
-		return selection
+		return [selection, item_id]
 
 
 def select_employee():
-	selection = choices(employees)
-	hours = float(input(f"\nHow many hours did {selection['name']} work?: "))
-	print(f"Gross pay = ${selection['rate'] * hours}")
-	description = input('Please add a description: ')
-	data = payroll_data(hours, selection, description)
-	r =	s.post(url + '1d103fa7-6fc1-4951-811e-972968b842cc', data=json.dumps(data))
+	r = s.get(f'{mgr_url}{employee_url}')
+	selection = choices(r.json())
+	hours = float(input(f"\nHow many hours did {selection[0]['Name']} work?: "))
+	print(f"Gross pay = ${int(selection[0]['CustomFields'][pay_rate]) * hours}")
+	description = input('Please add a description for the payslip: ')
+	data = payroll_data(hours, selection[0], description, selection[1])
+	r =	s.post(mgr_url + payslip_url, data=json.dumps(data))
+	print(r.text)
 	display_title_bar()
 	if r.status_code == 201:
 		print('Success!')
@@ -65,41 +67,42 @@ def select_employee():
 		print(f'Something went wrong. Error: {r.status_code}')
 
 
-def payroll_data(hours, employee_data, description):
+def payroll_data(hours, employee_data, description, employee_id):
+	rate = int(employee_data['CustomFields'][pay_rate])
 
 	data = {
 		'Date': date.today().strftime("%Y/%m/%d"),
-		'Employee': employee_data['id'],
+		'Employee': employee_id,
 		'Earnings': [
 			{
-				'Item': "4d89f708-f265-4cd7-8f6b-587ef38a2aae",
+				'Item': earnings,
 				'Units': hours,
-				'Rate': employee_data['rate']
+				'Rate': rate
 			}
 		],
 		'Deductions': [
 			{
-				'Item': '086775b0-3684-4a92-a2ce-7106798fce47', # Federal Taxes
-				'Amount': round((hours * employee_data['rate']) * employee_data['fed_holding'],2)
+				'Item': federal_deduction, # Federal Taxes
+				'Amount': round((hours * rate) * int(employee_data['CustomFields'][fed_holding]),2)
 			},
 			{
-				'Item': '744996a6-828b-4ac2-baa7-e3b81ee5e70b', # Medicare
-				'Amount': round((hours * employee_data['rate']) * .0145,2)
+				'Item': medicare_deduction, # Medicare
+				'Amount': round((hours * rate) * .0145,2)
 			},
 			{
-				'Item': '2d2f6d15-26da-4b1c-9de0-ab7f713e0bae', # Social Security
-				'Amount': round((hours * employee_data['rate']) * .0620,2)
+				'Item': ss_deduction, # Social Security
+				'Amount': round((hours * rate) * .0620,2)
 
 			}
 		],
 		'Contributions': [
 			{
-				'Item': '9fa2e97e-46bc-48a2-a1c8-10df235c564f', # Employer Medicare
-				'Amount': round((hours * employee_data['rate']) * .0145,2)
+				'Item': employer_medicare, # Employer Medicare
+				'Amount': round((hours * rate) * .0145,2)
 			},
 			{
-				'Item': 'cb50fb6b-c645-4fa8-8aab-0ebd7d4f398a', # Employer Socail Security
-				'Amount': round((hours * employee_data['rate']) * .0620,2)
+				'Item': employer_ss, # Employer Socail Security
+				'Amount': round((hours * rate) * .0620,2)
 			}
 		],
 		'Description': description,
@@ -122,13 +125,13 @@ class Customer:
 		self.email = self.customer['Email']
 
 def invoices(choice):
-	invoices = s.get(url + 'ad12b60b-23bf-4421-94df-8be79cef533e/index.json')
+	invoices = s.get(url + invoice_url)
 	pdfWriter = PyPDF2.PdfFileWriter()
 	for invoice in tqdm(invoices.json()):
 		data = s.get(url + invoice + '.json')
 		try:
 			if data.json()['CustomFields']['0738aee9-3adb-4c7f-9d65-4d6f2278e386'] == "False": #tests if invoice is marked paid
-				r = s.get(f'https://sewell.manager.io/sales-invoice-view.pdf?Key={invoice}&FileID=QXphbGlhIEFwYXJ0bWVudHM')
+				r = s.get(f'https://{mgr_domain}.manager.io/sales-invoice-view.pdf?Key={invoice}&FileID={mgr_api_root}')
 				if r.status_code == 200:
 					with open(f'{invoice}.pdf', 'wb') as out_file:
 						out_file.write(r.content)
