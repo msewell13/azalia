@@ -1,9 +1,6 @@
 from functions import *
 
 
-## Future developments ##
-# on website allow tenant to put in invoice number to pay a specific invoice and use Manager api to recored the payment
-
 # Set up a loop where users can choose what they'd like to do.
 choice = ''
 display_title_bar()
