@@ -2,3 +2,6 @@ config.py
 __pycache__
 sample.pdf
 invoices.pdf
+
+\!*
+.vscode
