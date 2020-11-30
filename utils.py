@@ -5,12 +5,12 @@ from sendgrid.helpers.mail import (Mail, Attachment, FileContent, FileName, File
 
 
 
-def send_email(email, attachment):
+def send_email(email, attachment, user):
     message = Mail(
-        from_email='Matt@PythonFinancial.com',
+        from_email=user.email,
         to_emails=email,
         subject='Your monthly invoice is ready...',
-        html_content='<strong>Please see the attached document.</strong><br>If you have any questions please call.<br><br>Matt Sewell<br>509.863.3607'
+        html_content=f'<strong>Please see the attached document.</strong><br>If you have any questions please call.<br><br>{user.name}<br>{user.phone}'
         )
 
     with open(attachment, 'rb') as f:
