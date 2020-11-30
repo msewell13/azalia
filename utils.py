@@ -27,7 +27,7 @@ def send_email(email, attachment):
     message.attachment = attachedFile
 
     try:
-        sg = SendGridAPIClient('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')
+        sg = SendGridAPIClient(sendgrid_api)
         response = sg.send(message)
         print(response.status_code)
         print(response.body)
