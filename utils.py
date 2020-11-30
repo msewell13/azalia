@@ -1,8 +1,7 @@
 import os
 import base64
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import (Mail, Attachment, FileContent, FileName, FileType, Disposition)
-
+from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName, FileType, Mail
 
 
 def send_email(email, attachment):
@@ -10,8 +9,8 @@ def send_email(email, attachment):
         from_email='Matt@PythonFinancial.com',
         to_emails=email,
         subject='Your monthly invoice is ready...',
-        html_content='<strong>Please see the attached document.</strong><br>If you have any questions please call.<br><br>Matt Sewell<br>509.863.3607'
-        )
+        html_content='<strong>Please see the attached document.</strong><br>If you have any questions please call.<br><br>Matt Sewell<br>509.863.3607',
+    )
 
     with open(attachment, 'rb') as f:
         data = f.read()
@@ -22,22 +21,17 @@ def send_email(email, attachment):
         FileContent(encoded_file),
         FileName(attachment),
         FileType('application/pdf'),
-        Disposition('attachment')
+        Disposition('attachment'),
     )
     message.attachment = attachedFile
 
     try:
-        sg = SendGridAPIClient('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')
+        sg = SendGridAPIClient(
+            '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'
+        )
         response = sg.send(message)
         print(response.status_code)
         print(response.body)
         print(response.headers)
     except Exception as e:
         print(e.message)
-
-
-
-
-
-
-
