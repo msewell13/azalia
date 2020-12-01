@@ -1,7 +1,11 @@
-config.py
+*.pdf
+*.html
+*.py[cdo]
 __pycache__
-sample.pdf
-invoices.pdf
+config.py
+
 
 \!*
 .vscode
+.python-version
+.DS_Store
