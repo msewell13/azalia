@@ -1,5 +1,13 @@
+# flake8: noqa
+import logging
 from functions import *
 
+
+LOG_LEVEL = logging.DEBUG
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL)
+
+log = logging.getLogger(__name__)
 
 # Set up a loop where users can choose what they'd like to do.
 choice = ''

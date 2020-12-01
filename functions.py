@@ -1,16 +1,21 @@
-from datetime import date
-import PyPDF2
-import os
-import requests
-from requests.auth import HTTPBasicAuth
+# flake8: noqa
 import json
-from tqdm import tqdm
-from utils import send_email
-from plaid import Client
 import lob
-from config import *
-from lease import new_lease
+import logging
+import os
+import PyPDF2
 import re
+import requests
+import sys
+
+from datetime import date
+from plaid import Client
+from tqdm import tqdm
+
+from api_clients import ManagerAPIClient
+from lease import new_lease
+from utils import send_email
+from config import *
 
 
 DEBUG = True
@@ -24,6 +29,9 @@ else:
 s = requests.Session()
 s.auth = (mgr_usr, mgr_pass)
 url = mgr_url
+
+log = logging.getLogger(__name__)
+api = ManagerAPIClient(mgr_domain, (mgr_usr, mgr_pass), mgr_api_root)
 
 
 def display_title_bar():
@@ -123,29 +131,36 @@ class Customer:
 
 
 def invoices(choice):
-    invoices = s.get(url + 'ad12b60b-23bf-4421-94df-8be79cef533e/index.json')
+    invoices = api.get_object('ad12b60b-23bf-4421-94df-8be79cef533e').json()
+
     pdfWriter = PyPDF2.PdfFileWriter()
-    for invoice in tqdm(invoices.json()):
-        data = s.get(url + invoice + '.json')
+    for invoice in tqdm(invoices[3:5]):  # TODO: drop splicing
+        log.info(f'processing invoice: {invoice}')
+        data = api.get_object(invoice, False).json()
+
         try:
             if (
-                data.json()['CustomFields']['0738aee9-3adb-4c7f-9d65-4d6f2278e386'] == "False"
+                data['CustomFields']['0738aee9-3adb-4c7f-9d65-4d6f2278e386'] == "False"
             ):  # tests if invoice is marked paid
-                r = s.get(
-                    f'https://sewell.manager.io/sales-invoice-view.pdf?Key={invoice}&FileID=QXphbGlhIEFwYXJ0bWVudHM'
-                )
-                if r.status_code == 200:
+                params = {'Key': invoice, 'FileID': 'QXphbGlhIEFwYXJ0bWVudHM'}
+                r = api.get('sales-invoice-view.pdf', params=params)
+
+                if r.status_code == requests.codes.ok:
                     with open(f'{invoice}.pdf', 'wb') as out_file:
                         out_file.write(r.content)
+                        out_file.flush()
+
                     if choice == '2':
                         pdfReader = PyPDF2.PdfFileReader(f'{invoice}.pdf')
                         for pageNum in range(pdfReader.numPages):
                             pageObj = pdfReader.getPage(pageNum)
                             # pageObj.scaleTo(width=612, height=792)
                             pdfWriter.addPage(pageObj)
+
                         # Send invoice to tenant
                         customer_id = s.get(url + f'{invoice}.json').json()['Customer']
                         customer = Customer(customer_id)
+
                         send_letter(
                             customer.name,
                             customer.address,
@@ -154,6 +169,7 @@ def invoices(choice):
                             customer.zip_code,
                             f'{invoice}.pdf',
                         )
+
                     elif choice == '3':
                         try:
                             customer = s.get(url + f'{invoice}.json').json()['Customer']
@@ -166,11 +182,12 @@ def invoices(choice):
                     os.remove(f'{invoice}.pdf')
                 else:
                     tqdm.write(f'Something went wrong with invoice: {invoice}')
+
                 pdfOutputFile = open('invoices.pdf', 'wb')
                 pdfWriter.write(pdfOutputFile)
                 pdfOutputFile.close()
             else:
-                pass
+                log.info(f'skipping paid invoice: {invoice}')
         except KeyError:
             pass
 
