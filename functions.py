@@ -134,7 +134,7 @@ def invoices(choice):
     invoices = api.get_object('ad12b60b-23bf-4421-94df-8be79cef533e').json()
 
     pdfWriter = PyPDF2.PdfFileWriter()
-    for invoice in tqdm(invoices[3:5]):  # TODO: drop splicing
+    for invoice in tqdm(invoices):
         log.info(f'processing invoice: {invoice}')
         data = api.get_object(invoice, False).json()
 
