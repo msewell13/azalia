@@ -12,6 +12,3 @@ repos:
     - flake8-bugbear
     - flake8-builtins
     - flake8-comprehensions
-    args:
-    - --max-complexity=18
-    - --max-line-length=88
