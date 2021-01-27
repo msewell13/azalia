@@ -12,35 +12,17 @@ from datetime import date
 from plaid import Client
 from tqdm import tqdm
 
-from api_clients import ManagerAPIClient
 from lease import new_lease
-from utils import send_email
-from config import *
+from utils import api_client as api, config, output_dir, send_email
 
 
 DEBUG = True
-
-if DEBUG == True:
-    lob.api_key = test_secret
-else:
-    lob.api_key = live_secret
-
-
-s = requests.Session()
-s.auth = (mgr_usr, mgr_pass)
-url = mgr_url
-
 log = logging.getLogger(__name__)
-api = ManagerAPIClient(mgr_domain, (mgr_usr, mgr_pass), mgr_api_root)
 
 
-def display_title_bar():
-    # Clears the terminal screen, and displays a title bar.
-    os.system('clear')
-
-    print("\t**********************************************")
-    print("\t***            Azalia Apartments           ***")
-    print("\t**********************************************")
+# configure lob service
+lob_conf = config.services.lob
+lob.api_key = lob_conf.test_token if DEBUG else lob_conf.live_token
 
 
 def choices(list_of_dicts):
@@ -65,7 +47,7 @@ def select_employee():
     description = input('Please add a description: ')
     data = payroll_data(hours, selection, description)
     r = s.post(url + '1d103fa7-6fc1-4951-811e-972968b842cc', data=json.dumps(data))
-    display_title_bar()
+    utils.display_title()
     if r.status_code == 201:
         print('Success!')
     else:
@@ -121,7 +103,7 @@ def payroll_data(hours, employee_data, description):
 class Customer:
     def __init__(self, customer_id):
         self.customer_id = customer_id
-        self.customer = s.get(url + f'{self.customer_id}.json').json()
+        self.customer = api.get_resource(customer_id, False).json()
         self.name = self.customer['Name']
         self.address = re.split('\n', self.customer['BillingAddress'])[0]
         self.city = re.findall('([^,]+),', self.customer['BillingAddress'])[0]
@@ -131,33 +113,34 @@ class Customer:
 
 
 def invoices(choice):
-    invoices = api.get_object('ad12b60b-23bf-4421-94df-8be79cef533e').json()
+    invoices = api.get_resource_data(config.resources.invoice)
     pdfWriter = PyPDF2.PdfFileWriter()
-    for invoice in tqdm(invoices):
-        log.info(f'processing invoice: {invoice}')
-        data = api.get_object(invoice, False).json()
+
+    for invoice in tqdm(invoices[:5]):
+        log.debug(f'processing invoice: {invoice}')
+        data = api.get_resource_data(invoice, False)
 
         try:
-            if (
-                data['CustomFields']['0738aee9-3adb-4c7f-9d65-4d6f2278e386'] == "False"
-            ):  # tests if invoice is marked paid
-                params = {'Key': invoice, 'FileID': 'QXphbGlhIEFwYXJ0bWVudHM'}
+            # tests if invoice is marked paid
+            if data.CustomFields[config.custom_fields.invoice] == "False":
+                params = {'Key': invoice, 'FileID': config.business_id}
                 r = api.get('sales-invoice-view.pdf', params=params)
 
                 if r.status_code == requests.codes.ok:
-                    with open(f'{invoice}.pdf', 'wb') as out_file:
+                    invoice_pdf = output_dir.joinpath(f'{invoice}.pdf')
+                    with invoice_pdf.open('wb') as out_file:
                         out_file.write(r.content)
                         out_file.flush()
 
                     if choice == '2':
-                        pdfReader = PyPDF2.PdfFileReader(f'{invoice}.pdf')
+                        pdfReader = PyPDF2.PdfFileReader(str(invoice_pdf))
                         for pageNum in range(pdfReader.numPages):
                             pageObj = pdfReader.getPage(pageNum)
                             # pageObj.scaleTo(width=612, height=792)
                             pdfWriter.addPage(pageObj)
 
                         # Send invoice to tenant
-                        customer_id = s.get(url + f'{invoice}.json').json()['Customer']
+                        customer_id = api.get_resource_data(invoice, False).Customer
                         customer = Customer(customer_id)
 
                         send_letter(
@@ -166,14 +149,14 @@ def invoices(choice):
                             customer.city,
                             customer.state,
                             customer.zip_code,
-                            f'{invoice}.pdf',
+                            str(invoice_pdf),
                         )
 
                     elif choice == '3':
                         try:
-                            customer = s.get(url + f'{invoice}.json').json()['Customer']
-                            email = s.get(url + f'{customer}.json').json()['Email']
-                            send_email(email, f'{invoice}.pdf')
+                            customer = api.get_resource_data(invoice, False).Customer
+                            email = api.get_resource_data(customer, False).Email
+                            send_email(email, str(invoice_pdf))
                         except KeyError:
                             tqdm.write('This customer does not have an email')
                     else:
@@ -182,11 +165,11 @@ def invoices(choice):
                 else:
                     tqdm.write(f'Something went wrong with invoice: {invoice}')
 
-                pdfOutputFile = open('invoices.pdf', 'wb')
-                pdfWriter.write(pdfOutputFile)
-                pdfOutputFile.close()
+                with output_dir.joinpath('invoices.pdf').open('wb') as pdf:
+                    pdfWriter.write(pdf)
+                    pdf.close()
             else:
-                log.info(f'skipping paid invoice: {invoice}')
+                tqdm.write(f'skipping paid invoice: {invoice}')
         except KeyError:
             pass
 
@@ -214,7 +197,7 @@ def get_transactions():
         )
         transactions.extend(response['transactions'])
     upload = ''
-    display_title_bar()
+    utils.display_title()
     while upload.upper() != 'Y' and upload.upper() != 'N':
         upload = input("Would you like to upload these transactions to Manager? [Y/N]: ")
         if upload.upper() == 'Y':
@@ -242,10 +225,10 @@ def get_transactions():
                 else:
                     pass
         elif upload.upper() == 'N':
-            display_title_bar()
+            utils.display_title()
             print('Very well, the transactions will not be uploaded')
         else:
-            display_title_bar()
+            utils.display_title()
             print('The choice selected was not recognized. Try again.')
 
         # Save to CSV file for upload to Manager or offer to import into manager automatically
@@ -300,9 +283,9 @@ def create_documents():
             deposit,
             add_occ,
         )
-        display_title_bar()
+        utils.display_title()
     else:
-        display_title_bar()
+        utils.display_title()
         print('The choice selected was not recognized. Try again.')
         print(selection)
 

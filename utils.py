@@ -15,7 +15,6 @@ log = logging.getLogger(__name__)
 
 QUIT_ID = 'q'
 NEW_LINE = '\r\n'
-BUSINESS = 'azalia'
 EMAIL_HTML_CONTENT = '''
     '<strong>Please see the attached document.</strong><br>
     If you have any questions please call.<br><br>
@@ -79,14 +78,25 @@ class APIClient:
             res = self.session.get(target_url, **kwargs)
             log.debug(f'redirect: GET {target_url}')
 
-        # res.raise_for_status()
         return res
+
+    def get_data(self, pathname: str, params: dict = None) -> AttrDict:
+        """Performs a GET request, gracefully handles redirects and returns json
+        data.
+        """
+        data = self.get(pathname, params).json()
+        return AttrDict(data) if isinstance(data, dict) else data
 
     def get_resource(self, resource_id: str, is_collection=True) -> Response:
         """Performs a GET request for a resource from an API endpoint."""
         resource = '/index.json' if is_collection else '.json'
         pathname = f'api/{self.business_id}/{resource_id}{resource}'
         return self.get(pathname)
+
+    def get_resource_data(self, resource_id: str, is_collection=True) -> AttrDict:
+        """Performs a GET request for a resource from an API endpoint."""
+        data = self.get_resource(resource_id, is_collection).json()
+        return AttrDict(data) if isinstance(data, dict) else data
 
 
 def display_title() -> None:
@@ -178,9 +188,16 @@ def send_email(email, attachment):
 # read and set config
 config = read_config()
 
+
+# output dir
+output_dir = Path('./output')
+if not output_dir.exists():
+    output_dir.mkdir(exist_ok=True)
+
+
 # instantiate api clients
 api_client = APIClient(
     config.api.url,
-    config.api.business[BUSINESS],
+    config.business_id,
     (config.credential.username, config.credential.password),
 )
