@@ -3,7 +3,7 @@
 *.py[cdo]
 __pycache__
 config.py
-
+config.yml
 
 \!*
 .vscode

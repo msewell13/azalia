@@ -1,0 +1,31 @@
+debug: true
+
+credential:
+  username: ''
+  password: ''
+
+api:
+  domain: ''
+  url: 'https://{api.domain}.manager.io/'
+  business:
+    <name>: '<hash>'
+
+services:
+  lob:
+    live_token: ''
+    test_token: ''
+  sendgrid:
+    live_token: ''
+
+resources:
+  # root resources
+  bank: ''
+  employee: ''
+  invoice: ''
+  payslip: ''
+
+  # payroll accounts
+  earnings: ''
+  federal_deduction: ''
+  medicare_deduction: ''
+  employer_medicare: ''
