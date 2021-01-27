@@ -1,45 +1,63 @@
 # flake8: noqa
+import argparse
 import logging
-from functions import *
+import sys
 
+import utils, functions as fn
+from typing import List, Tuple
 
-LOG_LEVEL = logging.INFO
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL)
 
 log = logging.getLogger(__name__)
 
-# Set up a loop where users can choose what they'd like to do.
-choice = ''
-display_title_bar()
-while choice != 'q':
 
-    print('\n[1] Run payroll')
-    print('[2] Get tenant invoices')
-    print('[3] Email tenant invoices')
-    print('[4] Get Bank Transactions')
-    print('[5] Create Documents')
-    print('[q] Quit.')
+def configure_logging(level) -> None:
+    """Configures the core attributes for the logger.
 
-    choice = input("\nPlease select an option: ")
+    :param level: the default log level, defaults to logging.INFO
+    :type level: [type], optional
+    """
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    logging.basicConfig(format=log_format, level=level)
 
-    if choice == '1':
-        display_title_bar()
-        select_employee()
-    elif choice == '2':
-        display_title_bar()
-        invoices(choice)
-        display_title_bar()
-    elif choice == '3':
-        display_title_bar()
-        invoices(choice)
-        display_title_bar()
-    elif choice == '4':
-        display_title_bar()
-        get_transactions()
-    elif choice == '5':
-        display_title_bar()
-        create_documents()
-    elif choice == 'q':
-        display_title_bar()
-        print('Goodbye')
+
+def initiate_task():
+    menu_items: List[Tuple(str, Callabel)] = [
+        ('Run Payroll', lambda c: fn.select_employee()),
+        ('Get Tenant Invoices', lambda c: fn.invoices(c)),
+        ('Email Tenant Invoices', lambda c: fn.invoices(c)),
+        ('Get Bank Transactions', lambda c: fn.get_transactions()),
+        ('Create Document', lambda c: fn.create_documents()),
+    ]
+
+    labels = list(map(lambda i: i[0], menu_items))
+    choice = utils.make_choice(labels)
+
+    utils.display_title()
+    if choice == utils.QUIT_ID:
+        print('Goodbye\n')
+        sys.exit(0)
+
+    choice_value = int(choice) - 1
+    func = menu_items[choice_value][1]
+
+    try:
+        func(choice)
+    except Exception as ex:
+        print(f'>> error: {ex}\n')
+        sys.exit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--debug', help='show debug logs', action='store_true')
+    parser.add_argument('-l', '--log', help='enable logging', action='store_true')
+
+    args = parser.parse_args(sys.argv[1:])
+    if args.log:
+        log_level = logging.DEBUG if args.debug else logging.INFO
+        configure_logging(log_level)
+
+    initiate_task()
+
+
+main()

@@ -1,7 +1,7 @@
 import base64
 import logging
+import os
 
-from enum import Enum
 from pathlib import Path
 from requests import codes, Response, Session
 from sendgrid import SendGridAPIClient
@@ -10,6 +10,10 @@ from typing import Any, List, Optional, Tuple
 from yaml import load, Loader
 
 
+log = logging.getLogger(__name__)
+
+
+QUIT_ID = 'q'
 NEW_LINE = '\r\n'
 BUSINESS = 'azalia'
 EMAIL_HTML_CONTENT = '''
@@ -18,9 +22,6 @@ EMAIL_HTML_CONTENT = '''
     Matt Sewell<br>
     509.863.3607'
 '''
-
-LOG_LEVEL = logging.INFO
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
 
 class AttrDict(dict):
@@ -32,7 +33,9 @@ class AttrDict(dict):
         else:
             if value:
                 if isinstance(value, dict):
-                    return AttrDict(value)
+                    value = AttrDict(value)
+                    self[key] = value
+
                 return value
 
     def __setattr__(self, key: str, value: Any):
@@ -57,12 +60,10 @@ class APIClient:
         codes.temporary_redirect,
     ]
 
-    def __init__(self, domain: str, business_id: str, auth: Tuple[str, str]):
+    def __init__(self, base_url: str, business_id: str, auth: Tuple[str, str]):
         self.auth = auth
-        self.domain = domain
+        self.base_url = base_url
         self.business_id = business_id
-
-        self.base_url = f'https://{domain}.manager.io'
         self.session = Session()
 
     def get(self, pathname: str, params: dict = None) -> Response:
@@ -88,36 +89,11 @@ class APIClient:
         return self.get(pathname)
 
 
-class MenuAction(Enum):
-    GetPayroll = '1'
-    GetInvoice = '2'
-    EmailInvoice = '3'
-    GetTransactions = '4'
-    CreateDocument = '5'
-
-    @classmethod
-    def get_labels(cls):
-        return [
-            (cls.GetPayroll, 'Run Payroll'),
-            (cls.GetInvoice, 'Get Tenant Invoices'),
-            (cls.EmailInvoice, 'Email Tenant Invoices'),
-            (cls.GetTransactions, 'Get Bank Transactons'),
-            (cls.CreateDocument, 'Create Documents'),
-        ]
-
-
-def configure_logging(level=LOG_LEVEL, log_format=LOG_FORMAT) -> None:
-    """Configures the core attributes for the logger.
-
-    :param level: the default log level, defaults to logging.INFO
-    :type level: [type], optional
-    """
-    logging.basicConfig(format=log_format, level=level)
-
-
 def display_title() -> None:
     title = 'Azalia Apartments'
     line = f"{NEW_LINE}{'*' * 50}{NEW_LINE}"
+
+    os.system('clear' if os.name == 'posix' else 'cls')
     print(f'{line}***{title:^44}***{line}')
 
 
@@ -133,14 +109,14 @@ def make_choice(choices: List[str], include_quit: bool = True) -> str:
 
     menu_choices = list(enumerate(choices, start=1))
     if include_quit:
-        menu_choices += [('q', 'Quit Menu')]
+        menu_choices += [(QUIT_ID, 'Quit Menu')]
 
     choice_values = list(map(lambda e: str(e[0]), menu_choices))
     for idx, text in menu_choices:
         print(f'[{idx}] {text}')
 
     choice = None
-    choice_range = f'1-{len(choices)}' + ('|q' if include_quit else '')
+    choice_range = f'1-{len(choices)}' + (f'|{QUIT_ID}' if include_quit else '')
     while choice not in choice_values:
         if choice is None:
             choice = input(f'\nPlease select an option [{choice_range}]: ').strip()
@@ -192,21 +168,15 @@ def send_email(email, attachment):
     except Exception as ex:
         log.error(ex)
     else:
-        log.info(f'Email sent to: {email}')
+        log.debug(f'Email sent to: {email}')
         log.debug(f'status code: {response.status_code}')
         log.debug(f'headers: {response.headers}')
         log.debug(f'body: {response.body}')
 
 
-# configure logger
-configure_logging()
-log = logging.getLogger(__name__)
-
-
 # SET GLOBAL VARIABLES
 # read and set config
 config = read_config()
-
 
 # instantiate api clients
 api_client = APIClient(
