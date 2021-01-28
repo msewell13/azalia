@@ -1,13 +1,12 @@
 import base64
 import lob
 import logging
-import os
 import re
 import requests
 
 from collections import namedtuple
 from pathlib import Path
-from typing import Any, Iterable, List
+from typing import Any, Iterable, List, Optional
 
 from PyPDF2.pdf import PageObject
 from PyPDF2 import PdfFileReader, PdfFileWriter
@@ -59,52 +58,46 @@ class Invoice(namedtuple('Invoice', ['id', 'data', 'file'], defaults=[None])):
     PT_SCALE = 72  # 1in = 72pt
     PDF_NAME = 'sales-invoice-view.pdf'
 
-    def __iter__(self) -> Iterable[PageObject]:
+    def get_pages(self) -> Iterable[PageObject]:
         """Return page of the invoice as a iterator."""
-        with self.file.open('rb') as f:
-            reader = PdfFileReader(f)
-            for page_no in range(reader.numPages):
-                page = reader.getPage(page_no)
-                yield page
+        reader = PdfFileReader(str(self.file))
+        for page_no in range(reader.numPages):
+            page = reader.getPage(page_no)
+            yield page
 
-    def get_file(self, output_dir: Path) -> bool:
+    def get_pdf(self, output_dir: Path) -> Optional[Path]:
         params = {'Key': self.id, 'FileID': config.business_id}
         res = api.get(self.PDF_NAME, params=params)
         if res.status_code != requests.codes.ok:
-            return False
+            return
 
-        self.save(res.content, output_dir)
-        return True
+        return self.save(res.content, output_dir)
 
     def is_paid(self) -> bool:
         return self.data.CustomFields[config.custom_fields.invoice] == 'True'
 
     def save(self, content: Any, output_dir: Path):
         output_file = output_dir.joinpath(f'{self.id}.pdf')
-        self._replace(file=output_file)
-
-        with self.file.open('wb') as f:
+        with output_file.open('wb') as f:
             f.write(content)
             f.flush()
+
+        return output_file
 
     def scale_to(self, width: float, height: float, output_dir: Path):
         writer = PdfFileWriter()
 
         SCALE = self.PT_SCALE
-        for page in iter(self):
+        for page in self.get_pages():
             page.scaleTo(width=SCALE * width, height=SCALE * height)
             writer.addPage(page)
 
         scaled_file = output_dir.joinpath(f'{self.id}.scaled.pdf')
         with scaled_file.open('wb') as f:
-            writer.writer(f)
+            writer.write(f)
             f.close()
 
-        # delete old file
-        os.remove(self.file)
-
-        # replace file with scaled one
-        self._replace(file=scaled_file)
+        return scaled_file
 
     @classmethod
     def list_all(cls) -> List[str]:

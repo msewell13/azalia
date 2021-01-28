@@ -130,7 +130,7 @@ def make_choice(choices: List[str], include_quit: bool = True) -> str:
     return choice
 
 
-def read_config(filename='config.yml'):
+def read_config(filename='config.yaml'):
     """Read configuration."""
     config_file = Path(__file__).absolute().parent / filename
     if not config_file.exists():

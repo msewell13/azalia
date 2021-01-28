@@ -4,6 +4,7 @@
 __pycache__
 config.py
 config.yml
+config.yaml
 
 \!*
 .vscode

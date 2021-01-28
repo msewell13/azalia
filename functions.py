@@ -224,7 +224,7 @@ def process_invoices(send_as_letter: bool):
     invoices_writer = PyPDF2.PdfFileWriter()
     send = send_letter if send_as_letter else send_email
 
-    for invoice_id in tqdm(invoice_ids[:5]):
+    for invoice_id in tqdm(invoice_ids):
         log.debug(f'processing invoice: {invoice_id}')
 
         invoice = Invoice.get(invoice_id)
@@ -233,21 +233,33 @@ def process_invoices(send_as_letter: bool):
             continue
 
         # pull invoice pdf
-        if not invoice.get_file(output_dir):
+        invoice_pdf = invoice.get_pdf(output_dir)
+        if not invoice_pdf:
             warn(f'Something went wrong with invoice: {invoice.id}')
             continue
 
-        if send_as_letter:
-            invoice.scale_to(8.5, 11.0, output_dir)
+        # update tuple to hold ref to the invoice pdf file
+        invoice = invoice._replace(file=invoice_pdf)
 
+        if send_as_letter:
+            scaled_pdf = invoice.scale_to(8.5, 11.0, output_dir)
+
+            # update tuple to hold ref to scaled pd file & delete old file
+            invoice = invoice._replace(file=scaled_pdf)
+            os.remove(invoice_pdf)
+
+        # add invoice into invoices
+        for page in invoice.get_pages():
+            invoices_writer.addPage(page)
+
+        # send invoice
         customer = Customer.get(invoice.data.Customer)
         send(invoice, customer)
 
-        # add invoice into invoices
-        for page in iter(invoice):
-            invoices_writer.addPage(page)
+        # drop invoice
+        os.remove(invoice.file)
 
     # save merged invoices
-    with output_dir.joinpath('invoices.pdf').open('rb') as f:
+    with output_dir.joinpath('invoices.pdf').open('wb') as f:
         invoices_writer.write(f)
         f.flush()
