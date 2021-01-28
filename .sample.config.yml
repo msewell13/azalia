@@ -1,14 +1,13 @@
 debug: true
+business_id: ''
 
-credential:
+auth:
   username: ''
   password: ''
 
 api:
   domain: ''
   url: 'https://{api.domain}.manager.io/'
-  business:
-    <name>: '<hash>'
 
 services:
   lob:
@@ -29,3 +28,6 @@ resources:
   federal_deduction: ''
   medicare_deduction: ''
   employer_medicare: ''
+
+custom_fields:
+  invoice: ''

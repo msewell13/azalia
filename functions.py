@@ -1,6 +1,5 @@
 # flake8: noqa
 import json
-import lob
 import logging
 import os
 import PyPDF2
@@ -13,16 +12,11 @@ from plaid import Client
 from tqdm import tqdm
 
 from lease import new_lease
-from utils import api_client as api, config, output_dir, send_email
+from invoice import Customer, Invoice, send_email, send_letter
+from utils import api_client as api, config, output_dir, warn
 
 
-DEBUG = True
 log = logging.getLogger(__name__)
-
-
-# configure lob service
-lob_conf = config.services.lob
-lob.api_key = lob_conf.test_token if DEBUG else lob_conf.live_token
 
 
 def choices(list_of_dicts):
@@ -98,80 +92,6 @@ def payroll_data(hours, employee_data, description):
     }
 
     return data
-
-
-class Customer:
-    def __init__(self, customer_id):
-        self.customer_id = customer_id
-        self.customer = api.get_resource(customer_id, False).json()
-        self.name = self.customer['Name']
-        self.address = re.split('\n', self.customer['BillingAddress'])[0]
-        self.city = re.findall('([^,]+),', self.customer['BillingAddress'])[0]
-        self.state = re.findall('\\s[A-Z]{2}\\s', self.customer['BillingAddress'])[0]
-        self.zip_code = re.findall('[0-9]{5}', self.customer['BillingAddress'])[0]
-        self.email = self.customer['Email']
-
-
-def invoices(choice):
-    invoices = api.get_resource_data(config.resources.invoice)
-    pdfWriter = PyPDF2.PdfFileWriter()
-
-    for invoice in tqdm(invoices[:5]):
-        log.debug(f'processing invoice: {invoice}')
-        data = api.get_resource_data(invoice, False)
-
-        try:
-            # tests if invoice is marked paid
-            if data.CustomFields[config.custom_fields.invoice] == "False":
-                params = {'Key': invoice, 'FileID': config.business_id}
-                r = api.get('sales-invoice-view.pdf', params=params)
-
-                if r.status_code == requests.codes.ok:
-                    invoice_pdf = output_dir.joinpath(f'{invoice}.pdf')
-                    with invoice_pdf.open('wb') as out_file:
-                        out_file.write(r.content)
-                        out_file.flush()
-
-                    if choice == '2':
-                        pdfReader = PyPDF2.PdfFileReader(str(invoice_pdf))
-                        for pageNum in range(pdfReader.numPages):
-                            pageObj = pdfReader.getPage(pageNum)
-                            # pageObj.scaleTo(width=612, height=792)
-                            pdfWriter.addPage(pageObj)
-
-                        # Send invoice to tenant
-                        customer_id = api.get_resource_data(invoice, False).Customer
-                        customer = Customer(customer_id)
-
-                        send_letter(
-                            customer.name,
-                            customer.address,
-                            customer.city,
-                            customer.state,
-                            customer.zip_code,
-                            str(invoice_pdf),
-                        )
-
-                    elif choice == '3':
-                        try:
-                            customer = api.get_resource_data(invoice, False).Customer
-                            email = api.get_resource_data(customer, False).Email
-                            send_email(email, str(invoice_pdf))
-                        except KeyError:
-                            tqdm.write('This customer does not have an email')
-                    else:
-                        tqdm.write('The choice selected was not recognized')
-                    os.remove(f'{invoice}.pdf')
-                else:
-                    tqdm.write(f'Something went wrong with invoice: {invoice}')
-
-                with output_dir.joinpath('invoices.pdf').open('wb') as pdf:
-                    pdfWriter.write(pdf)
-                    pdf.close()
-            else:
-                tqdm.write(f'skipping paid invoice: {invoice}')
-        except KeyError:
-            pass
 
 
 def get_transactions():
@@ -290,27 +210,44 @@ def create_documents():
         print(selection)
 
 
-def send_letter(name, address, city, state, zip_code, file):
-    lob.Letter.create(
-        description='Demo Letter',
-        to_address={
-            'name': name,
-            'address_line1': address,
-            'address_city': city,
-            'address_state': state,
-            'address_zip': zip_code,
-        },
-        from_address='adr_8948dc77b27123cb',
-        file=open(file, 'rb'),
-        color=False,
-        return_envelope=True,
-        perforated_page=1,
-    )
+def process_invoices(send_as_letter: bool):
+    """Retrieves and processes invoice data.
 
+    :param send_as_letter: send processed invoice as letter if true, else as email
+    :type send_as_letter: bool
+    """
+    invoice_ids = Invoice.list_all()
+    if not invoice_ids:
+        print('Operation aborted. Invoices not found.')
+        return
 
-# def new_tenant():
-# 	# create tenant in Manager
-# 	# send onboarding letter and tenant rules via lob
-# 	# send onboarding email with tenant rules attached
+    invoices_writer = PyPDF2.PdfFileWriter()
+    send = send_letter if send_as_letter else send_email
 
-# def late_rent():
+    for invoice_id in tqdm(invoice_ids[:5]):
+        log.debug(f'processing invoice: {invoice_id}')
+
+        invoice = Invoice.get(invoice_id)
+        if invoice.is_paid():
+            warn(f'skipping paid invoice: {invoice.id}')
+            continue
+
+        # pull invoice pdf
+        if not invoice.get_file(output_dir):
+            warn(f'Something went wrong with invoice: {invoice.id}')
+            continue
+
+        if send_as_letter:
+            invoice.scale_to(8.5, 11.0, output_dir)
+
+        customer = Customer.get(invoice.data.Customer)
+        send(invoice, customer)
+
+        # add invoice into invoices
+        for page in iter(invoice):
+            invoices_writer.addPage(page)
+
+    # save merged invoices
+    with output_dir.joinpath('invoices.pdf').open('rb') as f:
+        invoices_writer.write(f)
+        f.flush()

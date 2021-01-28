@@ -23,8 +23,8 @@ def configure_logging(level) -> None:
 def initiate_task():
     menu_items: List[Tuple(str, Callabel)] = [
         ('Run Payroll', lambda c: fn.select_employee()),
-        ('Get Tenant Invoices', lambda c: fn.invoices(c)),
-        ('Email Tenant Invoices', lambda c: fn.invoices(c)),
+        ('Get Tenant Invoices', lambda c: fn.process_invoices(c == '2')),
+        ('Email Tenant Invoices', lambda c: fn.process_invoices(c == '2')),
         ('Get Bank Transactions', lambda c: fn.get_transactions()),
         ('Create Document', lambda c: fn.create_documents()),
     ]
@@ -44,6 +44,7 @@ def initiate_task():
         func(choice)
     except Exception as ex:
         print(f'>> error: {ex}\n')
+        log.error(ex, exc_info=True)
         sys.exit(1)
 
 
@@ -53,7 +54,7 @@ def main():
     parser.add_argument('-l', '--log', help='enable logging', action='store_true')
 
     args = parser.parse_args(sys.argv[1:])
-    if args.log:
+    if args.log or args.debug:
         log_level = logging.DEBUG if args.debug else logging.INFO
         configure_logging(log_level)
 

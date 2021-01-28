@@ -1,12 +1,11 @@
-import base64
 import logging
 import os
 
 from pathlib import Path
-from requests import codes, Response, Session
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers import mail
 from typing import Any, List, Optional, Tuple
+
+from requests import codes, Response, Session
+from tqdm import tqdm
 from yaml import load, Loader
 
 
@@ -15,12 +14,6 @@ log = logging.getLogger(__name__)
 
 QUIT_ID = 'q'
 NEW_LINE = '\r\n'
-EMAIL_HTML_CONTENT = '''
-    '<strong>Please see the attached document.</strong><br>
-    If you have any questions please call.<br><br>
-    Matt Sewell<br>
-    509.863.3607'
-'''
 
 
 class AttrDict(dict):
@@ -141,7 +134,7 @@ def read_config(filename='config.yml'):
     """Read configuration."""
     config_file = Path(__file__).absolute().parent / filename
     if not config_file.exists():
-        raise Exception(f'Configuration file not found: {filename}')
+        raise ValueError(f'Configuration file not found: {filename}')
 
     with config_file.open('r') as fp:
         config = AttrDict(load(fp, Loader))
@@ -151,37 +144,9 @@ def read_config(filename='config.yml'):
     return config
 
 
-def send_email(email, attachment):
-    with open(attachment, 'rb') as f:
-        data = f.read()
-        f.close()
-
-    encoded_file = base64.b64encode(data).decode()
-    attached_file = mail.Attachment(
-        mail.Disposition('attachment'),
-        mail.FileContent(encoded_file),
-        mail.FileName(attachment),
-        mail.FileType('application/pdf'),
-    )
-
-    message = mail.Mail(
-        from_email='',
-        to_email=email,
-        subject='Your monthly invoice is ready ...',
-        html_content=EMAIL_HTML_CONTENT,
-    )
-
-    message.attachment = attached_file
-    try:
-        sg = SendGridAPIClient(config.services.sendgrid.live_token)
-        response = sg.send(message)
-    except Exception as ex:
-        log.error(ex)
-    else:
-        log.debug(f'Email sent to: {email}')
-        log.debug(f'status code: {response.status_code}')
-        log.debug(f'headers: {response.headers}')
-        log.debug(f'body: {response.body}')
+def warn(text: str) -> None:
+    log.debug(text)
+    tqdm.write(text)
 
 
 # SET GLOBAL VARIABLES
@@ -199,5 +164,5 @@ if not output_dir.exists():
 api_client = APIClient(
     config.api.url,
     config.business_id,
-    (config.credential.username, config.credential.password),
+    (config.auth.username, config.auth.password),
 )
