@@ -1,14 +1,22 @@
 repos:
-- repo: https://github.com/psf/black
-  rev: 20.8b1
-  hooks:
-  - id: black
-    language_version: python3
-- repo: https://gitlab.com/pycqa/flake8
-  rev: 3.8.4
-  hooks:
-  - id: flake8
-    additional_dependencies:
-    - flake8-bugbear
-    - flake8-builtins
-    - flake8-comprehensions
+  - repo: https://github.com/psf/black
+    rev: 20.8b1
+    hooks:
+      - id: black
+        language_version: python3
+        args:
+          - --line-length=96
+          - --skip-string-normalization
+          - --quiet
+
+  - repo: https://gitlab.com/pycqa/flake8
+    rev: 3.8.4
+    hooks:
+      - id: flake8
+        additional_dependencies:
+          - flake8-bugbear
+          - flake8-builtins
+          - flake8-comprehensions
+        args:
+          - --max-complexity=10
+          - --max-line-length=96

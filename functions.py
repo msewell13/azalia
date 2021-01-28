@@ -15,6 +15,8 @@ from lease import new_lease
 from invoice import Customer, Invoice, send_email, send_letter
 from utils import api_client as api, config, output_dir, warn
 
+# from config import *
+
 
 log = logging.getLogger(__name__)
 
